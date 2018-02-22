@@ -22,6 +22,10 @@ import pika
 # ----------- START: In-App Imports ---------- #
 # ----------- END: In-App Imports ---------- #
 
+
+__import__('pkg_resources').declare_namespace(__name__)
+
+
 __all__ = [
     # All public symbols go here.
 ]
