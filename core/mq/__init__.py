@@ -32,11 +32,18 @@ __all__ = [
 
 
 class SimpleRabbitMQ(object):
+
     def __init__(self, **mq_details):
 
         self.connection = pika.BlockingConnection(
             pika.ConnectionParameters(
-                **mq_details
+                host=mq_details['host'],
+                port=mq_details['port'],
+                virtual_host=mq_details['vhost'],
+                credentials=pika.PlainCredentials(
+                    mq_details['username'],
+                    mq_details['password']
+                )
             )
         )
 
@@ -64,21 +71,11 @@ class SimpleRabbitMQ(object):
     def close_conn(self):
         self.connection.close()
 
-
-class SimpleConsumer(SimpleRabbitMQ):
-    def __init__(self, **mq_details):
-        super(self.__class__, self).__init__(**mq_details)
-
     def on_response(self, ch, method, properties, body):
         print(" [x] Received %r" % body)
 
     def listen(self, queue):
         self.consume(queue, self.on_response)
-
-
-class SimpleProducer(SimpleRabbitMQ):
-    def __init__(self, **mq_details):
-        super(self.__class__, self).__init__(**mq_details)
 
     def emit(self, queue, payload):
         self.publish(queue, payload)
