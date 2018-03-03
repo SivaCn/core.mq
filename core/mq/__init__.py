@@ -20,6 +20,11 @@ import pika
 # ----------- END: Third Party Imports ---------- #
 
 # ----------- START: In-App Imports ---------- #
+from core.utils.environ import (
+    get_queue_details,
+    get_normalized_rmq_env_details,
+    get_normalized_rmq_credentials
+)
 # ----------- END: In-App Imports ---------- #
 
 
@@ -42,15 +47,17 @@ class SimpleRabbitMQ(object):
 
         self.channel = self.connection.channel()
 
-    def publish(self, queue, payload):
+    def _publish(self, queue, exchange, queue_durable=False, payload=None):
 
-        self.channel.queue_declare(queue=queue)
+        if payload:
 
-        self.channel.basic_publish(
-            exchange='',
-            routing_key=queue,
-            body=payload
-        )
+            self.channel.queue_declare(queue=queue, durable=queue_durable)
+
+            self.channel.basic_publish(
+                exchange=exchange,
+                routing_key=queue,
+                body=json.dumps(payload)
+            )
 
         self.close_conn()
 
@@ -80,5 +87,30 @@ class SimpleProducer(SimpleRabbitMQ):
     def __init__(self, **mq_details):
         super(self.__class__, self).__init__(**mq_details)
 
-    def emit(self, queue, payload):
+    def publish(self, queue, payload):
         self.publish(queue, payload)
+
+
+class SimpleCentralizedLogProducer(SimpleRabbitMQ):
+
+    def __init__(self):
+
+        rmq_env_details = get_normalized_rmq_env_details()
+        rmq_cred_details = get_normalized_rmq_credentials()
+
+        credentials = pika.credentials.PlainCredentials(**rmq_cred_details)
+
+        super(self.__class__, self).__init__(credentials=credentials, **rmq_env_details)
+
+        self.queue_name, self.queue_durable = get_queue_details()['central_logger_queue']
+
+    def publish(self, payload):
+        self._publish(
+            queue=self.queue_name,
+            exchange='test_exchange',
+            queue_durable=self.queue_durable,
+            payload=payload
+        )
+
+        self.close_conn()
+
