@@ -104,12 +104,12 @@ class SimpleCentralizedLogProducer(SimpleRabbitMQ):
 
         self.queue_name, self.queue_durable = get_queue_details()['central_logger_queue']
 
-    def publish(self, payload):
+    def publish(self, *args, **kwargs):
         self._publish(
             queue=self.queue_name,
             exchange='test_exchange',
             queue_durable=self.queue_durable,
-            payload=payload
+            payload=kwargs
         )
 
         self.close_conn()
