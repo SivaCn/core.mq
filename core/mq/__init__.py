@@ -37,7 +37,7 @@ __all__ = [
 
 
 class SimpleRabbitMQ(object):
-    def __init__(self, **mq_details):
+    def __init__(self, enable_auxiliary=False, **mq_details):
 
         self.connection = pika.BlockingConnection(
             pika.ConnectionParameters(
@@ -47,19 +47,30 @@ class SimpleRabbitMQ(object):
 
         self.channel = self.connection.channel()
 
-    def _publish(self, queue, exchange, queue_durable=False, payload=None):
+        if enable_auxiliary:
+            self.aux_connection = pika.BlockingConnection(
+                pika.ConnectionParameters(
+                    **mq_details
+                )
+            )
+
+            self.aux_channel = self.connection.channel()
+
+    def _publish(self, queue, exchange, queue_durable=False, properties=None, queue_declare=True, payload=None):
 
         if payload:
 
-            self.channel.queue_declare(queue=queue, durable=queue_durable)
+            if queue_declare:
+                self.channel.queue_declare(queue=queue, durable=queue_durable)
 
             self.channel.basic_publish(
                 exchange=exchange,
                 routing_key=queue,
-                body=json.dumps(payload)
+                body=json.dumps(payload),
+                properties=properties
             )
 
-        self.close_conn()
+        #self.close_conn()
 
     def consume(self, queue, callback):
         self.channel.basic_consume(
@@ -83,12 +94,26 @@ class SimpleConsumer(SimpleRabbitMQ):
         self.consume(queue, self.on_response)
 
 
-class SimpleProducer(SimpleRabbitMQ):
-    def __init__(self, **mq_details):
-        super(self.__class__, self).__init__(**mq_details)
+class SimplePublisher(SimpleRabbitMQ):
+    def __init__(self):
 
-    def publish(self, queue, payload):
-        self.publish(queue, payload)
+        rmq_env_details = get_normalized_rmq_env_details()
+        rmq_cred_details = get_normalized_rmq_credentials()
+
+        credentials = pika.credentials.PlainCredentials(**rmq_cred_details)
+
+        super(self.__class__, self).__init__(credentials=credentials, **rmq_env_details)
+
+    def publish(self, queue_name, payload, durable=False):
+
+        self.queue_name, self.queue_durable = queue_name, durable
+
+        self._publish(
+            queue_name,
+            exchange='',
+            payload=payload,
+            queue_durable=durable,
+        )
 
 
 class SimpleCentralizedLogProducer(SimpleRabbitMQ):
@@ -114,3 +139,59 @@ class SimpleCentralizedLogProducer(SimpleRabbitMQ):
 
         self.close_conn()
 
+
+class SimpleSchedulerPublisher(SimpleRabbitMQ):
+    pass
+
+
+class RPCSchedulerPublisher(SimpleRabbitMQ):
+
+    def __init__(self):
+        rmq_env_details = get_normalized_rmq_env_details()
+        rmq_cred_details = get_normalized_rmq_credentials()
+
+        credentials = pika.credentials.PlainCredentials(**rmq_cred_details)
+
+        super(self.__class__, self).__init__(
+            credentials=credentials, enable_auxiliary=True, **rmq_env_details
+        )
+
+        self.queue_name, self.queue_durable = get_queue_details()['scheduler_queue']
+
+    def on_response(self, ch, method, props, body):
+
+        self.response = json.loads(body)
+
+    def publish(self, *args, **kwargs):
+
+        self.response = None
+        self.corr_id = str(uuid.uuid4())
+
+        reply_to_queue = str(uuid.uuid4())
+
+        kwargs['reply_to_queue'] = reply_to_queue
+
+        self._publish(
+            queue=self.queue_name,
+            exchange='test_exchange',
+            queue_durable=self.queue_durable,
+            payload=kwargs,
+        )
+
+        # self.aux_channel.queue_declare(queue=reply_to_queue)
+
+        # self.aux_channel.basic_consume(
+        #     self.on_response, no_ack=True, queue=reply_to_queue
+        # )
+
+
+        # self.aux_channel.start_consuming()
+
+        # import pdb; pdb.set_trace() ## XXX: Remove This
+        # while self.response is None:
+        #     #self.connection.process_data_events()
+        #     pass
+
+        self.close_conn()
+
+        return self.response
