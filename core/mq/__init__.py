@@ -47,6 +47,8 @@ class SimpleRabbitMQ(object):
 
         self.channel = self.connection.channel()
 
+        self.aux_channel = None
+
         if enable_auxiliary:
             self.aux_connection = pika.BlockingConnection(
                 pika.ConnectionParameters(
@@ -70,8 +72,6 @@ class SimpleRabbitMQ(object):
                 properties=properties
             )
 
-        #self.close_conn()
-
     def consume(self, queue, callback):
         self.channel.basic_consume(
             callback, queue=queue, no_ack=True
@@ -81,6 +81,9 @@ class SimpleRabbitMQ(object):
 
     def close_conn(self):
         self.connection.close()
+
+        if self.aux_channel:
+            self.aux_connection.close()
 
 
 class SimpleConsumer(SimpleRabbitMQ):
@@ -162,14 +165,32 @@ class RPCSchedulerPublisher(SimpleRabbitMQ):
 
         self.response = json.loads(body)
 
+        self.aux_channel.stop_consuming()
+        self.aux_channel.queue_delete(self.reply_to_queue)
+
+    def on_timeout():
+
+        _message = 'Request timed out'
+
+        self.response = {
+            'result': False,
+            'message': '',
+            'error_message': _message,
+            'error_trace': ''
+        }
+
+        self.aux_channel.stop_consuming()
+        self.aux_channel.queue_delete(self.reply_to_queue)
+
+
     def publish(self, *args, **kwargs):
 
         self.response = None
         self.corr_id = str(uuid.uuid4())
 
-        reply_to_queue = str(uuid.uuid4())
+        self.reply_to_queue = 'response-q-{}'.format(str(uuid.uuid4()))
 
-        kwargs['reply_to_queue'] = reply_to_queue
+        kwargs['reply_to_queue'] = self.reply_to_queue
 
         self._publish(
             queue=self.queue_name,
@@ -178,19 +199,15 @@ class RPCSchedulerPublisher(SimpleRabbitMQ):
             payload=kwargs,
         )
 
-        # self.aux_channel.queue_declare(queue=reply_to_queue)
+        self.aux_channel.queue_declare(queue=self.reply_to_queue)
 
-        # self.aux_channel.basic_consume(
-        #     self.on_response, no_ack=True, queue=reply_to_queue
-        # )
+        self.aux_channel.basic_consume(
+            self.on_response, no_ack=True, queue=self.reply_to_queue
+        )
 
+        #self.aux_connection.add_timeout(10, self.on_timeout)
 
-        # self.aux_channel.start_consuming()
-
-        # import pdb; pdb.set_trace() ## XXX: Remove This
-        # while self.response is None:
-        #     #self.connection.process_data_events()
-        #     pass
+        self.aux_channel.start_consuming()
 
         self.close_conn()
 
