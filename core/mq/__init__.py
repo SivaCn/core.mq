@@ -113,7 +113,7 @@ class SimplePublisher(SimpleRabbitMQ):
 
         self._publish(
             queue_name,
-            exchange='',
+            exchange='test_exchange',
             payload=payload,
             queue_durable=durable,
         )
