@@ -199,15 +199,15 @@ class RPCSchedulerPublisher(SimpleRabbitMQ):
             payload=kwargs,
         )
 
-        self.aux_channel.queue_declare(queue=self.reply_to_queue)
+        # self.aux_channel.queue_declare(queue=self.reply_to_queue)
 
-        self.aux_channel.basic_consume(
-            self.on_response, no_ack=True, queue=self.reply_to_queue
-        )
+        # self.aux_channel.basic_consume(
+        #     self.on_response, no_ack=True, queue=self.reply_to_queue
+        # )
 
         #self.aux_connection.add_timeout(10, self.on_timeout)
 
-        self.aux_channel.start_consuming()
+        # self.aux_channel.start_consuming()
 
         self.close_conn()
 
