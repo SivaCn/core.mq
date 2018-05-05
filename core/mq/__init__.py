@@ -25,6 +25,8 @@ from core.utils.environ import (
     get_normalized_rmq_env_details,
     get_normalized_rmq_credentials
 )
+
+from core.utils.environ import get_normalized_rmq_credentials
 # ----------- END: In-App Imports ---------- #
 
 
@@ -43,12 +45,19 @@ class SimpleRabbitMQ(object):
 
     def __init__(self):
 
+        rmq_env_details = {
+            key: value
+            for key, value in
+            get_normalized_rmq_env_details().items()
+            if key in ('host','port', 'virtual_host', )
+        }
+
         self.connection = pika.BlockingConnection(
             pika.ConnectionParameters(
                 credentials=pika.credentials.PlainCredentials(
                     **get_normalized_rmq_credentials()
                 ),
-                **get_normalized_rmq_env_details()
+                **rmq_env_details
             )
         )
 
@@ -58,7 +67,7 @@ class SimpleRabbitMQ(object):
 
         queue = queue or self.queue_name
         queue_durable = queue_durable or self.queue_durable
-        exchange = exchange or 'test_exchange'
+        exchange = exchange or get_normalized_rmq_env_details()['exchange']
 
         is_published = False
 
