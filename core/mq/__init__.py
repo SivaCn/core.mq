@@ -27,6 +27,11 @@ from core.utils.environ import (
 )
 
 from core.utils.environ import get_normalized_rmq_credentials
+
+from core.backend.utils.core_utils import AutoSession
+from core.db.model import (
+    ConfigUserSmsModel, CodeSmsEventsModel, CodeEventsModel
+)
 # ----------- END: In-App Imports ---------- #
 
 
@@ -106,6 +111,30 @@ class SimpleSMSPublisher(SimpleRabbitMQ):
         super(self.__class__, self).__init__()
 
         self.queue_name, self.queue_durable = queue_details['central_sms_queue']
+
+    def publish(self, sms_event, queue=None, exchange=None, queue_durable=False, properties=None, queue_declare=True, payload=None, user_idn=None):
+
+        is_sms_event_enabled = True
+
+        # get all active recs from config_user_sms table
+
+        # if sms_event is active in config_user_sms table then publish else return
+        with AutoSession() as session:
+            _config_user_sms = ConfigUserSmsModel.get_active_sms_events(session, sms_event, user_idn)
+
+        if is_sms_event_enabled:
+
+            return super(self.__class__, self).publish(
+                queue=queue, 
+                exchange=exchange,
+                queue_durable=queue_durable,
+                properties=properties,
+                queue_declare=queue_declare,
+                payload=payload
+            )
+
+        return
+
 
 
 class SimpleSchedulerPublisher(SimpleRabbitMQ):
