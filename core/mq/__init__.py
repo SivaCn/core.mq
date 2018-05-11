@@ -112,29 +112,28 @@ class SimpleSMSPublisher(SimpleRabbitMQ):
 
         self.queue_name, self.queue_durable = queue_details['central_sms_queue']
 
-    def publish(self, sms_event, queue=None, exchange=None, queue_durable=False, properties=None, queue_declare=True, payload=None, user_idn=None):
-
-        is_sms_event_enabled = True
-
-        # get all active recs from config_user_sms table
+    def publish(self,
+                sms_event,
+                user_idn,
+                queue=None,
+                exchange=None,
+                queue_durable=False,
+                properties=None,
+                queue_declare=True,
+                payload=None):
 
         # if sms_event is active in config_user_sms table then publish else return
         with AutoSession() as session:
-            _config_user_sms = ConfigUserSmsModel.get_active_sms_events(session, sms_event, user_idn)
+            if ConfigUserSmsModel.is_sms_notif_opted(session, sms_event=sms_event, user_idn=user_idn):
 
-        if is_sms_event_enabled:
-
-            return super(self.__class__, self).publish(
-                queue=queue, 
-                exchange=exchange,
-                queue_durable=queue_durable,
-                properties=properties,
-                queue_declare=queue_declare,
-                payload=payload
-            )
-
-        return
-
+                return super(self.__class__, self).publish(
+                    queue=queue,
+                    exchange=exchange,
+                    queue_durable=queue_durable,
+                    properties=properties,
+                    queue_declare=queue_declare,
+                    payload=payload
+                )
 
 
 class SimpleSchedulerPublisher(SimpleRabbitMQ):
